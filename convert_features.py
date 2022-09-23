@@ -35,7 +35,6 @@ from quac_metrics import (
     write_quac
 )
 
-from modeling_auto import AutoModelForQuestionAnswering
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -383,18 +382,13 @@ def main():
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    model = AutoModelForQuestionAnswering.from_pretrained(
-        args.model_name_or_path,
-        from_tf=bool(".ckpt" in args.model_name_or_path),
-        config=config,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
+
 
     if args.local_rank == 0:
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
 
-    model.to(args.device)
+    
 
     logger.info("Training/evaluation parameters %s", args)
 
