@@ -56,6 +56,9 @@ from quac_metrics import (
 from adapter_transformers.src.transformers.models.bert.modeling_bert import BertModel
 from adapter_transformers.src.transformers.models.bert.modeling_bert import BertForQuestionAnswering
 from adapter_transformers.src.transformers.models.bert.configuration_bert import BertConfig
+from adapter_transformers.src.transformers.adapters import AdapterConfig
+
+
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
@@ -799,7 +802,23 @@ def main():
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
 
+    adapter_training = True
+    if adapter_training == True:
+      config = AdapterConfig(mh_adapter=True, output_adapter=True, reduction_factor=16, non_linearity="relu")
+      model.add_adapter("bottleneck_adapter", config=config)
+      model.train_adapter("bottleneck_adapter")
+      model.set_active_adapters("bottleneck_adapter")
+    
+    #prints of the model and the frozen layers
+    print(model)
+    for name, param in list(model.named_parameters()):
+      if param.requires_grad == True:
+          print("I am not frozen", name)
+      else:
+          print("i am frozen",name)
+
     model.to(args.device)
+    
 
     logger.info("Training/evaluation parameters %s", args)
 
