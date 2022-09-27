@@ -56,7 +56,7 @@ from quac_metrics import (
 from adapter_transformers.src.transformers.models.bert.modeling_bert import BertModel
 from adapter_transformers.src.transformers.models.bert.modeling_bert import BertForQuestionAnswering
 from adapter_transformers.src.transformers.models.bert.configuration_bert import BertConfig
-from adapter_transformers.src.transformers.adapters import AdapterConfig
+from adapter_transformers.src.transformers.adapters import AdapterConfig,PrefixTuningConfig, CompacterPlusPlusConfig, PfeifferInvConfig
 
 
 try:
@@ -205,124 +205,125 @@ def train(args, train_dataset, model, tokenizer):
     # Added here for reproductibility
     set_seed(args)
     max_f1 = 0.0
-    for _ in train_iterator:
-        epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
-        for step, batch in enumerate(epoch_iterator):
+    with open('f1_scores.txt', 'w',buffering=1) as f:
+      for _ in train_iterator:
+          epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
+          for step, batch in enumerate(epoch_iterator):
+              # Skip past any already trained steps if resuming training
+              if steps_trained_in_current_epoch > 0:
+                  steps_trained_in_current_epoch -= 1
+                  continue
+              
+              input_ids = batch[0]
+              did = batch[10]
+              mask = np.zeros((input_ids.size(0), input_ids.size(0)))
 
-            # Skip past any already trained steps if resuming training
-            if steps_trained_in_current_epoch > 0:
-                steps_trained_in_current_epoch -= 1
-                continue
-            
-            input_ids = batch[0]
-            did = batch[10]
-            mask = np.zeros((input_ids.size(0), input_ids.size(0)))
+              start = 0
+              for i in range(1, len(did)):
+                  if did[i]!=did[i-1]:
+                      mask[start:i, start:i] = torch.tril(torch.ones(i-start, i-start))
+                      start = i
+              mask[start:, start:] = torch.tril(torch.ones(len(did)-start, len(did)-start))
+              ghr_mask = torch.tensor(mask, dtype=torch.long).to(args.device)   
 
-            start = 0
-            for i in range(1, len(did)):
-                if did[i]!=did[i-1]:
-                    mask[start:i, start:i] = torch.tril(torch.ones(i-start, i-start))
-                    start = i
-            mask[start:, start:] = torch.tril(torch.ones(len(did)-start, len(did)-start))
-            ghr_mask = torch.tensor(mask, dtype=torch.long).to(args.device)   
+              model.train()
+              batch = tuple(t.to(args.device) for t in batch)
+              inputs = {
+                  "input_ids": batch[0],
+                  "attention_mask": batch[1],
+                  "token_type_ids": batch[2],
+                  "start_positions": batch[3],
+                  "end_positions": batch[4],
+                  "no_answer":batch[7],
+                  "yes_no":batch[8],
+                  "follow_up":batch[9],
+                  "ghr_mask":ghr_mask
+              }
 
-            model.train()
-            batch = tuple(t.to(args.device) for t in batch)
-            inputs = {
-                "input_ids": batch[0],
-                "attention_mask": batch[1],
-                "token_type_ids": batch[2],
-                "start_positions": batch[3],
-                "end_positions": batch[4],
-                "no_answer":batch[7],
-                "yes_no":batch[8],
-                "follow_up":batch[9],
-                "ghr_mask":ghr_mask
-            }
+              if args.model_type in ["xlm", "roberta", "distilbert", "camembert", "bart"]:
+                  del inputs["token_type_ids"]
 
-            if args.model_type in ["xlm", "roberta", "distilbert", "camembert", "bart"]:
-                del inputs["token_type_ids"]
+              if args.model_type in ["xlnet", "xlm"]:
+                  inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
+                  if hasattr(model, "config") and hasattr(model.config, "lang2id"):
+                      inputs.update(
+                          {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
+                      )
 
-            if args.model_type in ["xlnet", "xlm"]:
-                inputs.update({"cls_index": batch[5], "p_mask": batch[6]})
-                if hasattr(model, "config") and hasattr(model.config, "lang2id"):
-                    inputs.update(
-                        {"langs": (torch.ones(batch[0].shape, dtype=torch.int64) * args.lang_id).to(args.device)}
-                    )
+              outputs = model(**inputs)
+              # model outputs are always tuple in transformers (see doc)
+              loss = outputs[0]
 
-            outputs = model(**inputs)
-            # model outputs are always tuple in transformers (see doc)
-            loss = outputs[0]
+              loss_value = {'orig_loss' : loss.item()}
+                        
+              if args.n_gpu > 1:
+                  loss = loss.mean()  # mean() to average on multi-gpu parallel (not distributed) training
+              if args.gradient_accumulation_steps > 1:
+                  loss = loss / args.gradient_accumulation_steps
 
-            loss_value = {'orig_loss' : loss.item()}
-                       
-            if args.n_gpu > 1:
-                loss = loss.mean()  # mean() to average on multi-gpu parallel (not distributed) training
-            if args.gradient_accumulation_steps > 1:
-                loss = loss / args.gradient_accumulation_steps
+              if args.fp16:
+                  with amp.scale_loss(loss, optimizer) as scaled_loss:
+                      scaled_loss.backward()
+              else:
+                  loss.backward()
+              
+              tr_loss += loss.item()
+              if (step + 1) % args.gradient_accumulation_steps == 0:
+                  if args.fp16:
+                      torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
+                  else:
+                      torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
-            if args.fp16:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-            
-            tr_loss += loss.item()
-            if (step + 1) % args.gradient_accumulation_steps == 0:
-                if args.fp16:
-                    torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
-                else:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                  optimizer.step()
+                  scheduler.step()  # Update learning rate schedule
+                  model.zero_grad()
+                  global_step += 1
 
-                optimizer.step()
-                scheduler.step()  # Update learning rate schedule
-                model.zero_grad()
-                global_step += 1
+                  # Log metrics
+                  if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                      # Only evaluate when single GPU otherwise metrics may not average well
+                      if args.local_rank == -1 and args.evaluate_during_training:
+                          results = evaluate(args, model, tokenizer)
+                          if results > max_f1:
+                              output_dir = os.path.join(args.output_dir, "bestmodel")
+                              model_to_save = model.module if hasattr(model, "module") else model
+                              model_to_save.save_pretrained(output_dir)
+                              max_f1 = results
+                          
+                          f.write(f"In {step} the f1 is {results}. Best f1 until now {max_f1}\n")
+                          logger.info("F1: %s", results)
+                          tb_writer.add_scalar("eval_f1", results, global_step)
+                      tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
+                      tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
+                      loss_value.update({'step' : step})
+                      logging_loss = tr_loss
 
-                # Log metrics
-                if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
-                    # Only evaluate when single GPU otherwise metrics may not average well
-                    if args.local_rank == -1 and args.evaluate_during_training:
-                        results = evaluate(args, model, tokenizer)
-                        if results > max_f1:
-                            output_dir = os.path.join(args.output_dir, "bestmodel")
-                            model_to_save = model.module if hasattr(model, "module") else model
-                            model_to_save.save_pretrained(output_dir)
-                            max_f1 = results
+                  # Save model checkpoint
+                  if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
+                      output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
+                      # Take care of distributed/parallel training
+                      model_to_save = model.module if hasattr(model, "module") else model
+                      model_to_save.save_pretrained(output_dir)
+                      tokenizer.save_pretrained(output_dir)
 
-                        logger.info("F1: %s", results)
-                        tb_writer.add_scalar("eval_f1", results, global_step)
-                    tb_writer.add_scalar("lr", scheduler.get_lr()[0], global_step)
-                    tb_writer.add_scalar("loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
-                    loss_value.update({'step' : step})
-                    logging_loss = tr_loss
+                      torch.save(args, os.path.join(output_dir, "training_args.bin"))
+                      logger.info("Saving model checkpoint to %s", output_dir)
 
-                # Save model checkpoint
-                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
-                    output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
-                    # Take care of distributed/parallel training
-                    model_to_save = model.module if hasattr(model, "module") else model
-                    model_to_save.save_pretrained(output_dir)
-                    tokenizer.save_pretrained(output_dir)
+                      # torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                      # torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
+                      logger.info("Saving optimizer and scheduler states to %s", output_dir)
 
-                    torch.save(args, os.path.join(output_dir, "training_args.bin"))
-                    logger.info("Saving model checkpoint to %s", output_dir)
+              if args.max_steps > 0 and global_step > args.max_steps:
+                  epoch_iterator.close()
+                  break
+          if args.max_steps > 0 and global_step > args.max_steps:
+              train_iterator.close()
+              break
 
-                    # torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                    # torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-                    logger.info("Saving optimizer and scheduler states to %s", output_dir)
+      if args.local_rank in [-1, 0]:
+          tb_writer.close()
 
-            if args.max_steps > 0 and global_step > args.max_steps:
-                epoch_iterator.close()
-                break
-        if args.max_steps > 0 and global_step > args.max_steps:
-            train_iterator.close()
-            break
-
-    if args.local_rank in [-1, 0]:
-        tb_writer.close()
-
-    return global_step, tr_loss / global_step
+      return global_step, tr_loss / global_step
 
 
 def evaluate(args, model, tokenizer, prefix="", write_predictions=True):
@@ -717,6 +718,12 @@ def main():
         type=str,
         help="prefix for cached file of datasets, features, and examples",
     )
+    parser.add_argument(
+        "--adapter_train",
+        default=None,
+        type=str,
+        help="adapter name to be used",
+    )
     args = parser.parse_args()
 
     if args.doc_stride >= args.max_seq_length - args.max_query_length:
@@ -802,13 +809,35 @@ def main():
         # Make sure only the first process in distributed training will download model & vocab
         torch.distributed.barrier()
 
-    adapter_training = True
-    if adapter_training == True:
-      config = AdapterConfig(mh_adapter=True, output_adapter=True, reduction_factor=16, non_linearity="relu")
-      model.add_adapter("bottleneck_adapter", config=config)
-      model.train_adapter("bottleneck_adapter")
-      model.set_active_adapters("bottleneck_adapter")
-    
+    #append adapters
+    if args.adapter_train:
+        if args.adapter_train == "bottleneck_adapter":
+          config = AdapterConfig(mh_adapter=True, output_adapter=True, reduction_factor=16, non_linearity="relu")
+          model.add_adapter(args.adapter_train, config=config)
+
+        elif args.adapter_train == "lang_adapter":
+          config = PfeifferInvConfig()
+          model.add_adapter("lang_adapter", config=config)
+
+        elif args.adapter_train == "prefix_tuning":
+            config = PrefixTuningConfig(flat=False, prefix_length=30)
+            model.add_adapter(args.adapter_train, config=config)
+            
+        #does not seem to train
+        elif args.adapter_train == "compacter_plusplus":
+          config = CompacterPlusPlusConfig(phm_layer = True)
+          model.add_adapter(args.adapter_train, config=config)
+
+        else:
+            raise ValueError(
+                "Provide a valid adapter name. Availlable adapters are: bottleneck_adapter, lang_adapter, prefix_tuning, compacter_plusplus"
+                )
+
+        #freeze all model weights except of the adapter
+        model.train_adapter(args.adapter_train)
+        #utilize the adapter in each forward pass
+        model.set_active_adapters(args.adapter_train)
+
     #prints of the model and the frozen layers
     print(model)
     for name, param in list(model.named_parameters()):
@@ -860,6 +889,9 @@ def main():
         # Load a trained model and vocabulary that you have fine-tuned
         model = BertForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
         tokenizer = AutoTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
+        
+        model.set_active_adapters(args.adapter_train)
+
         model.to(args.device)
 
     # Evaluation - we can ask to evaluate all the checkpoints (sub-directories) in a directory
@@ -884,7 +916,12 @@ def main():
             # Reload the model
             global_step = checkpoint.split("-")[-1] if re.search("checkpoint", checkpoint) else ""
             model = BertForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
+            
+
+            model.set_active_adapters(args.adapter_train)
+
             model.to(args.device)
+            model.save_adapter('./tmp/model/adapter_created', args.adapter_train)
 
             from apex import amp
             optimizer_grouped_parameters = [  {"params": [p for n, p in model.named_parameters()], "weight_decay": 0.0},]
