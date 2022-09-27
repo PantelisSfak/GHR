@@ -726,8 +726,8 @@ def main():
     )
     parser.add_argument(
         "--output_pred_file",
-        default=None,
-        type=str,
+        default=False, 
+        action='store_true',
         help="Specifies whether the final output should be printed",
     )
     parser.add_argument(
@@ -933,7 +933,10 @@ def main():
             model.set_active_adapters(args.adapter_train)
 
             model.to(args.device)
-            model.save_adapter('./tmp/model/adapter_created', args.adapter_train)
+            
+            #the adapter is saved only after training
+            if not args.for_eval_only:
+                model.save_adapter('./tmp/model/adapter_created', args.adapter_train)
 
             from apex import amp
             optimizer_grouped_parameters = [  {"params": [p for n, p in model.named_parameters()], "weight_decay": 0.0},]
