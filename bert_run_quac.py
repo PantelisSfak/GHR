@@ -461,8 +461,8 @@ def evaluate(args, model, tokenizer, prefix="", write_predictions=True):
     # Compute the F1 and exact scores.
     results = quac_performance(predictions, target_dict)
     
-
-    # write_quac(predictions, nbest_predictions, input_file, "pred.json", yes_no_predictions, follow_up_predictions)
+    if args.output_pred_file:
+      write_quac(predictions, nbest_predictions, input_file, "pred.json", yes_no_predictions, follow_up_predictions)
 
 
     return results
@@ -724,6 +724,18 @@ def main():
         type=str,
         help="adapter name to be used",
     )
+    parser.add_argument(
+        "--output_pred_file",
+        default=None,
+        type=str,
+        help="Specifies whether the final output should be printed",
+    )
+    parser.add_argument(
+        "--for_eval_only",
+        default=False, 
+        action='store_true',
+        help="Does not add adapters again for evaluation",
+    )
     args = parser.parse_args()
 
     if args.doc_stride >= args.max_seq_length - args.max_query_length:
@@ -810,7 +822,7 @@ def main():
         torch.distributed.barrier()
 
     #append adapters
-    if args.adapter_train:
+    if args.adapter_train and not args.for_eval_only:
         if args.adapter_train == "bottleneck_adapter":
           config = AdapterConfig(mh_adapter=True, output_adapter=True, reduction_factor=16, non_linearity="relu")
           model.add_adapter(args.adapter_train, config=config)
