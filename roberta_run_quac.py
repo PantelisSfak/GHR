@@ -53,10 +53,15 @@ from quac_metrics import (
     write_quac
 )
 
-from adapter_transformers.src.transformers.models.bert.modeling_bert import BertModel
-from adapter_transformers.src.transformers.models.bert.modeling_bert import BertForQuestionAnswering
-from adapter_transformers.src.transformers.models.bert.configuration_bert import BertConfig
+# from adapter_transformers.src.transformers.models.bert.modeling_bert import BertModel
+# from adapter_transformers.src.transformers.models.bert.modeling_bert import BertForQuestionAnswering
+# from adapter_transformers.src.transformers.models.bert.configuration_bert import BertConfig
 from adapter_transformers.src.transformers.adapters import AdapterConfig,PrefixTuningConfig, CompacterPlusPlusConfig, PfeifferInvConfig
+from adapter_transformers.src.transformers.models.roberta.modeling_roberta import RobertaModel
+from adapter_transformers.src.transformers.models.roberta.modeling_roberta import RobertaForQuestionAnswering
+from adapter_transformers.src.transformers.models.roberta.configuration_roberta import RobertaConfig
+
+
 
 
 try:
@@ -811,7 +816,7 @@ def main():
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    model = BertForQuestionAnswering.from_pretrained(
+    model = RobertaForQuestionAnswering.from_pretrained(
         args.model_name_or_path,
         from_tf=bool(".ckpt" in args.model_name_or_path),
         cache_dir=args.cache_dir if args.cache_dir else None,
@@ -856,9 +861,9 @@ def main():
     #keep unfrozen the extra layers + the head apart from the adapters
     for name, param in list(model.named_parameters()):
          name_split=name.split(".")
-         if "bertlayer" in name_split:
+         if "robertalayer" in name_split:
              param.requires_grad = True
-         if name == "bert.encoder.pe.weight" or name == "bert.encoder.LayerNorm.weight" or name == "bert.encoder.LayerNorm.bias":
+         if name == "roberta.encoder.pe.weight" or name == "roberta.encoder.LayerNorm.weight" or name == "roberta.encoder.LayerNorm.bias":
             param.requires_grad = True
 
     for name, param in list(model.named_parameters()):
@@ -908,7 +913,7 @@ def main():
         torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = BertForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
+        model = RobertaForQuestionAnswering.from_pretrained(args.output_dir)  # , force_download=True)
         tokenizer = AutoTokenizer.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
         
         
@@ -938,7 +943,7 @@ def main():
         for checkpoint in checkpoints:
             # Reload the model
             global_step = checkpoint.split("-")[-1] if re.search("checkpoint", checkpoint) else ""
-            model = BertForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
+            model = RobertaForQuestionAnswering.from_pretrained(checkpoint)  # , force_download=True)
             
             if args.adapter_train:
                 model.set_active_adapters(args.adapter_train)
