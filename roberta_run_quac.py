@@ -53,9 +53,6 @@ from quac_metrics import (
     write_quac
 )
 
-# from adapter_transformers.src.transformers.models.bert.modeling_bert import BertModel
-# from adapter_transformers.src.transformers.models.bert.modeling_bert import BertForQuestionAnswering
-# from adapter_transformers.src.transformers.models.bert.configuration_bert import BertConfig
 from adapter_transformers.src.transformers.adapters import AdapterConfig,PrefixTuningConfig, CompacterPlusPlusConfig, PfeifferInvConfig
 from adapter_transformers.src.transformers.models.roberta.modeling_roberta import RobertaModel
 from adapter_transformers.src.transformers.models.roberta.modeling_roberta import RobertaForQuestionAnswering
@@ -815,6 +812,7 @@ def main():
         args.tokenizer_name if args.tokenizer_name else args.model_name_or_path,
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None,
+        use_fast = False,
     )
     model = RobertaForQuestionAnswering.from_pretrained(
         args.model_name_or_path,
