@@ -14,8 +14,8 @@
 </div> 	
 
 
-We used the adapter-transformer architecture for the QUaC dataset, using the GHR approach to model dialogue history as described in [paper](https://aclanthology.org/2022.findings-naacl.159.pdf). 
-In order to reproduce our results adapter-transformers from https://github.com/PantelisSfak/adapter-transformers.git have to be cloned and used as adapter_transformers inside the GHR folder.
+We used the adapter-transformer architecture for the Conversational Question Answering task. In order to model dialogue history, the GHR model was utilized as described in [paper](https://aclanthology.org/2022.findings-naacl.159.pdf). 
+To reproduce our results, adapter-transformers from https://github.com/PantelisSfak/adapter-transformers.git have to be cloned and used as adapter_transformers inside the GHR folder.
 
 
 ## Setup
@@ -28,11 +28,11 @@ $ pip install transformers==4.22.2
 ### Datasets
 
 We use the [QuAC (Choi et al., 2018)](https://quac.ai/) dataset.
-'''bash
+```bash
 mkdir -p datasets
 wget https://s3.amazonaws.com/my89public/quac/train.json -O datasets/train.json
 wget https://s3.amazonaws.com/my89public/quac/val.json -O datasets/dev.json
-'''
+```
 
 ## Train
 
@@ -63,11 +63,10 @@ CUDA_VISIBLE_DEVICES=0 python3 roberta_run_quac.py \
   	--adapter_train bottleneck_adapter 
 ```
 
-There is the option to change adapter type. Adapters can also be removed and fine tune the transformer without freezing the weights of its layers. In order to achieve better results when fine-tuning the whole model, it is recomended to decrease the learning rate (lr=2e-5 could be used). Also apex `--fp16` is employed in order to accelerate training and prediction. To reproduce bert the bert_run_quac.py should be used.
+There is the option to change the adapter type. Adapters can also be removed and fine tune the transformer without freezing the weights of its layers. In order to achieve better results when fine-tuning the whole model, it is recomended to decrease the learning rate (lr=2e-5 could be used). Also apex `--fp16` is employed in order to accelerate training and prediction. To reproduce bert the bert_run_quac.py should be used.
 
 ## Evaluation
 
-The following example evaluates our trained model with the development set of QuAC.
 The example below, is for the evaluation of the development set of QUAC. It produces the file "pred.json". This file is used along with (scorer.py found in https://quac.ai/) for the official evaluation.
 
 ```bash
@@ -97,11 +96,12 @@ The example below, is for the evaluation of the development set of QUAC. It prod
 
 ### Result
 
-Evaluating models trained with predefined hyperparameters yields the following results:
+The results for training with Bert and Roberta models, with and without the use of bottleneck adapters are displayed below. When bottleneck adapters were not used, the learning rate was set to 2e-5.
 
-```bash
-DEV Results: {'F1': 74.9}  TEST Results: {'F1': 73.7}
-```
+<div align="center">
+  <img alt="GHR_results" src="https://github.com/PantelisSfak/GHR/blob/main/utils/results.png" width="600px">
+</div> 	
+
 
 ## Citation
 
