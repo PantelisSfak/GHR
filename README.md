@@ -1,12 +1,11 @@
 <h3 align="center">
-<p>GHR
+<p>Adapters-GHR
 <a href="https://github.com/jaytsien/GHR/blob/main/LICENSE">
    <img alt="GitHub" src="https://img.shields.io/badge/License-MIT-yellow.svg">
 </a>
 </h3>
 <div align="center">
     <p>Capturing Conversational Interaction for Question Answering via <b>G</b>lobal <b>H</b>istory <b>R</b>easoning
-    <p>NAACL Findings 2022
 </div>
 
 <div align="center">
@@ -101,15 +100,3 @@ The results for the development set of QuAC with Bert and Roberta models, with a
   <img alt="GHR_results" src="https://github.com/PantelisSfak/GHR/blob/main/utils/results.png" width="600px">
 </div> 	
 
-
-## Citation
-
-```bibtex
-@inproceedings{qian2022capturing,
-  title={Capturing Conversational Interaction for Question Answering via Global History Reasoning},
-  author={Qian, Jin and Zou, Bowei and Dong, Mengxing and Li, Xiao and Aw, Aiti and Hong, Yu},
-  booktitle={Findings of the Association for Computational Linguistics: NAACL 2022},
-  pages={2071--2078},
-  year={2022}
-}
-```
