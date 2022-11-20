@@ -14,80 +14,85 @@
 </div> 	
 
 
-We present GHR for conversational question answering (CQA). You can train ELECTRA by using our framework, GHR, described in our [paper](https://aclanthology.org/2022.findings-naacl.159.pdf). 
+We used the adapter-transformer architecture for the QUaC dataset, using the GHR approach to model dialogue history as described in [paper](https://aclanthology.org/2022.findings-naacl.159.pdf). 
+In order to reproduce our results adapter-transformers from https://github.com/PantelisSfak/adapter-transformers.git have to be cloned and used as adapter_transformers inside the GHR folder.
 
 
-## Requirements
+## Setup
 
 ```bash
-$ conda create -n GHR python=3.8.10
-$ conda activate GHR
-$ conda install tqdm
-$ conda install pytorch==1.5.0 torchvision==0.6.0 cudatoolkit=10.1 -c pytorch
-$ pip install transformers==3.5.0
+$ pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --extra-index-url https://download.pytorch.org/whl/cu113
+$ pip install transformers==4.22.2
 ```
 
 ### Datasets
 
-We use the [QuAC (Choi et al., 2018)](https://quac.ai/) dataset for training and evaluating our models, and test on the leaderboard.
+We use the [QuAC (Choi et al., 2018)](https://quac.ai/) dataset.
+'''bash
+mkdir -p datasets
+wget https://s3.amazonaws.com/my89public/quac/train.json -O datasets/train.json
+wget https://s3.amazonaws.com/my89public/quac/val.json -O datasets/dev.json
+'''
 
 ## Train
 
-The following example fine-tunes ELECTRA on the QuAC dataset by using GHR. 
-We performed all experiments using a single 16GB GPU (Tesla V100).
+
 
 ```bash
-INPUT_DIR=./datasets/
-OUTPUT_DIR=./tmp/model
 
-CUDA_VISIBLE_DEVICES=0 python3 run_quac.py \
-	--model_type electra  \
-	--model_name_or_path   electra-large \
+CUDA_VISIBLE_DEVICES=0 python3 roberta_run_quac.py \
+	--model_type roberta \
+	--model_name_or_path roberta-large \
 	--do_train \
 	--do_eval \
-        --data_dir ${INPUT_DIR} \
+  	--data_dir ./datasets/ \
 	--train_file train.json \
 	--predict_file dev.json \
-	--output_dir ${OUTPUT_DIR} \
-	--per_gpu_train_batch_size 12 \
+	--output_dir ./tmp/model \
+	--per_gpu_train_batch_size 6 \
 	--num_train_epochs 2 \
-	--learning_rate 2e-5 \
+	--learning_rate 2e-4 \
 	--weight_decay 0.01 \
 	--threads 20 \
 	--do_lower_case \
 	--fp16 --fp16_opt_level "O2" \
 	--evaluate_during_training \
-	--max_answer_length 50 --cache_prefix electra-large
+	--max_answer_length 50 \
+  	--cache_prefix roberta-large \
+	--logging_steps 3000 \
+  	--adapter_train bottleneck_adapter 
 ```
 
-By default, we use mixed precision apex `--fp16` for acceleration training and prediction. 
+There is the option to change adapter type. Adapters can also be removed and fine tune the transformer without freezing the weights of its layers. In order to achieve better results when fine-tuning the whole model, it is recomended to decrease the learning rate (lr=2e-5 could be used). Also apex `--fp16` is employed in order to accelerate training and prediction. To reproduce bert the bert_run_quac.py should be used.
 
 ## Evaluation
 
 The following example evaluates our trained model with the development set of QuAC.
+The example below, is for the evaluation of the development set of QUAC. It produces the file "pred.json". This file is used along with (scorer.py found in https://quac.ai/) for the official evaluation.
 
 ```bash
-INPUT_DIR=./datasets/
-MODEL_DIR=./tmp/model/
-OUTPUT_DIR=./tmp/
-
-CUDA_VISIBLE_DEVICES=0 python3 run_quac.py \
-	--model_type electra  \
-	--model_name_or_path   ${MODEL_DIR} \
+!CUDA_VISIBLE_DEVICES=0 python3 roberta_run_quac.py \
+	--model_type roberta  \
+	--model_name_or_path ./tmp/model \
 	--do_eval \
-        --data_dir ${INPUT_DIR} \
+  	--data_dir ./datasets/ \
 	--train_file train.json \
 	--predict_file dev.json \
-	--output_dir ${OUTPUT_DIR} \
+	--output_dir ./tmp \
 	--per_gpu_train_batch_size 12 \
 	--num_train_epochs 2 \
 	--learning_rate 2e-5 \
 	--weight_decay 0.01 \
 	--threads 20 \
 	--do_lower_case \
-	--fp16 --fp16_opt_level "O2" \
+	--fp16 \
+ 	--fp16_opt_level "O2" \
 	--evaluate_during_training \
-	--max_answer_length 50 --cache_prefix electra-large
+	--max_answer_length 50 \
+  	--cache_prefix roberta-large \
+	--adapter_train bottleneck_adapter \
+	--output_pred_file \
+  	--for_eval_only
 ```
 
 ### Result
