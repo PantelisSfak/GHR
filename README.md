@@ -14,7 +14,7 @@
 </div> 	
 
 
-We used the adapter-transformer architecture for the Conversational Question Answering task. In order to model dialogue history, the GHR model was utilized as described in [paper](https://aclanthology.org/2022.findings-naacl.159.pdf). 
+We used the adapter-transformer architecture for the Conversational Question Answering task. In order to model dialogue history, the GHR model was utilized as described [here](https://aclanthology.org/2022.findings-naacl.159.pdf). 
 To reproduce our results, adapter-transformers from https://github.com/PantelisSfak/adapter-transformers.git have to be cloned and used as adapter_transformers inside the GHR folder.
 
 
@@ -25,7 +25,7 @@ $ pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 -
 $ pip install transformers==4.22.2
 ```
 
-### Datasets
+### Dataset
 
 We use the [QuAC (Choi et al., 2018)](https://quac.ai/) dataset.
 ```bash
@@ -67,7 +67,6 @@ There is the option to change the adapter type. Adapters can also be removed and
 
 ## Evaluation
 
-The example below, is for the evaluation of the development set of QUAC. It produces the file "pred.json". This file is used along with (scorer.py found in https://quac.ai/) for the official evaluation.
 
 ```bash
 !CUDA_VISIBLE_DEVICES=0 python3 roberta_run_quac.py \
@@ -96,7 +95,7 @@ The example below, is for the evaluation of the development set of QUAC. It prod
 
 ### Result
 
-The results for training with Bert and Roberta models, with and without the use of bottleneck adapters are displayed below. When bottleneck adapters were not used, the learning rate was set to 2e-5.
+The results for the development set of QuAC with Bert and Roberta models, with and without the use of bottleneck adapters are displayed below. When bottleneck adapters were not used, the learning rate was set to 2e-5.
 
 <div align="center">
   <img alt="GHR_results" src="https://github.com/PantelisSfak/GHR/blob/main/utils/results.png" width="600px">
