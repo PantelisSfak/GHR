@@ -13,7 +13,7 @@
 </div> 	
 
 
-We used the adapter-transformer architecture for the Conversational Question Answering task. In order to model dialogue history, the GHR model was utilized as described [here](https://aclanthology.org/2022.findings-naacl.159.pdf). 
+We used the adapter-transformer architecture for the Conversational Question Answering task. In order to model dialogue history, the GHR model introduced [here](https://aclanthology.org/2022.findings-naacl.159.pdf) was utilized.
 To reproduce our results, adapter-transformers from https://github.com/PantelisSfak/adapter-transformers.git have to be cloned and used as adapter_transformers inside the GHR folder.
 
 
@@ -62,7 +62,7 @@ CUDA_VISIBLE_DEVICES=0 python3 roberta_run_quac.py \
   	--adapter_train bottleneck_adapter 
 ```
 
-There is the option to change the adapter type. Adapters can also be removed and fine tune the transformer without freezing the weights of its layers. In order to achieve better results when fine-tuning the whole model, it is recomended to decrease the learning rate (lr=2e-5 could be used). Also apex `--fp16` is employed in order to accelerate training and prediction. To reproduce bert the bert_run_quac.py should be used.
+There is the option to change the adapter type. Adapters can also be removed and fine tune the transformer without freezing the weights of its layers. In order to achieve better results when fine-tuning the whole model without adapters, it is recomended to decrease the learning rate (lr=2e-5 could be used). Also apex `--fp16` is employed in order to accelerate training and prediction. To reproduce bert the bert_run_quac.py file should be used.
 
 ## Evaluation
 
