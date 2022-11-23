@@ -14,7 +14,7 @@
 
 
 We used the adapter-transformer architecture for the Conversational Question Answering task. In order to model dialogue history, the GHR model introduced [here](https://aclanthology.org/2022.findings-naacl.159.pdf) was utilized.
-To reproduce our results, adapter-transformers from https://github.com/PantelisSfak/adapter-transformers.git have to be cloned and used as adapter_transformers inside the GHR folder.
+Adapter-transformers from https://github.com/adapter-hub/adapter-transformers were used. To reproduce our results the adapter transformers library has to be cloned from https://github.com/PantelisSfak/adapter-transformers.git. Then it should be renamed <q>adapter_transformers</q> inside the GHR directory .
 
 
 ## Setup
